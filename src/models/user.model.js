@@ -28,7 +28,7 @@ const userModel = new mongoose.Schema({
         type:String, //cloudinary url
         required:true,
     },
-    coverImg:{
+    coverImage:{
         type:String, //cloudinary url
     },
     watchHistory:[{
@@ -36,18 +36,18 @@ const userModel = new mongoose.Schema({
         ref:"Videos"
     }],
     password:{
-        types:String,
-        required:[true,'password is requried'],
+        type:String,
+        required:true,
     },
     refreshToken:{
-        types:String,
+        type:String,
     }
 
 },{timestamps:true})
 userModel.pre("save", async function (next){
     if(!this.isModified("password")) return next();
 
-    this.password = bcrypt.hash(this.password,10);
+    this.password = await bcrypt.hash(this.password,10);
     next();
 })
 
