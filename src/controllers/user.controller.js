@@ -1,7 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { apiError } from "../utils/apiError.js";
 import { User } from "../models/User.model.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { deleteFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import jwt from "jsonwebtoken";
 
@@ -214,4 +214,207 @@ const refreshAccessToken = asyncHandler(async(req,res)=>{
     }
 })
 
-export { userRegister, userLogin , userLogout , refreshAccessToken };
+const updateUserName = asyncHandler(async(req,res)=>{
+    const {oldUsername, newUsername} = req.body;
+
+    if(!oldUsername || !newUsername){
+        throw new apiError(401,"oldUsername and newUsername both required","oldUsername and newusername required")
+    }
+
+    if(oldUsername!==req.user.username){
+        throw new apiError(401,"oldusername is not correct","invalid oldusername");
+    }
+
+    if(oldUsername===newUsername){
+        throw new apiError(401,"new user should not match with old user name","invalid new username");
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set:{
+                username:newUsername,
+            }
+        },
+        {new:true}
+    ).select("-password -refreshToken");
+
+    if(!updatedUser){
+        throw new apiError(500,"something went wrong while updating username","error while updating username")
+    }
+
+    return res
+    .status(200)
+    .json(
+        new apiResponse(
+            200,
+            updatedUser,
+            "username changed successfully"
+        )
+    );
+})
+
+const updateFullname = asyncHandler(async(req,res)=>{
+    const {oldFullname, newFullname}=req.body;
+
+    if(!oldFullname || !newFullname){
+        throw new apiError(401,"both oldFullname and newFullname required","fullname and newFullname both required")
+    }
+
+    if(oldFullname!==req.user.fullName){
+        throw new apiError(401,"invalid old fullname","invalid old fullname")
+    }
+
+    if(oldFullname===newFullname){
+        throw new apiError(401,"new full name should not match old fullname","new full name is same as oldfullname")
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set:{
+                fullName:newFullname,
+            }
+        },
+        {new:true}
+    ).select("-password -refreshToken")
+
+    if(!updatedUser){
+        throw new apiError(500,"error in updating fullname","cannot update full name")
+    }
+
+    return res
+    .status(200)
+    .json(
+        new apiResponse(
+            200,
+            updatedUser,
+            "fullname changed successfully"
+        )
+    )
+});
+
+const changeAvatar = asyncHandler(async(req,res)=>{
+    if(!req.file){
+        throw new apiError(401,"no avatar file provide","no avatar file provided");
+    }
+    const avatarLocalPath = req.file.path;
+    if(!avatarLocalPath){
+        throw new apiError(401,"invalid avatar file path","invalid avatar file path")
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath);
+    if(!avatar){
+        throw new apiError(500,"cannot upload avatar on cloudinary","error in uploading avatar in cloudinary")
+    }
+
+    const oldAvatarPublicId = req.user.avatar.split('/').pop().split('.')[0];
+    const result = await deleteFromCloudinary(oldAvatarPublicId);
+    if(result?.result!=='ok' || !result){
+        throw new apiError(500,"cannot delete file from cloudinary");
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set:{
+                avatar:avatar?.url
+            }
+        },
+        {new:true}
+    ).select("-password -refreshToken")
+
+    return res
+    .status(200)
+    .json(new apiResponse(
+        200,
+        updatedUser,
+        "avatar changed successfully"
+    ))
+});
+
+const changeCover = asyncHandler(async(req,res)=>{
+    if(!req.file){
+        throw new apiError(401,"no cover image file provide","no cover image file provided");
+    }
+    const coverImageLocalPath = req.file.path;
+    if(!coverImageLocalPath){
+        throw new apiError(401,"invalid cover image file path","invalid avatar file path")
+    }
+
+    const coverImg = await uploadOnCloudinary(coverImageLocalPath);
+    if(!coverImg){
+        throw new apiError(500,"cannot upload cover image on cloudinary","error in uploading cover image in cloudinary")
+    }
+
+    const oldCoverImgPublicId = req.user.coverImage.split('/').pop().split('.')[0];
+    const result = await deleteFromCloudinary(oldCoverImgPublicId);
+    if(result?.result!=='ok' || !result){
+        throw new apiError(500,"cannot delete file from cloudinary");
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set:{
+                coverImage:coverImg?.url
+            }
+        },
+        {new:true}
+    ).select("-password -refreshToken")
+
+    return res
+    .status(200)
+    .json(new apiResponse(
+        200,
+        updatedUser,
+        "cover image changed successfully"
+    ))
+});
+
+const changePassword = asyncHandler(async(req,res)=>{
+    const {oldPassword,newPassword} = req.body;
+    if(!oldPassword || !newPassword){
+        throw new apiError(401,"both old passwor and new password required","both old password and new password required")
+    }
+    if(oldPassword===newPassword){
+        throw new apiError(401,"new password should not match old password","new password same as old password")
+    }
+
+    const user = await User.findById(req.user._id);
+
+    const validUser = await user.isPasswordCorrect(oldPassword);
+    if(!validUser){
+        throw new apiError(401,"invalid old password","invalid old password");
+    }
+
+    user.password = newPassword;
+    await user.save({validationBeforeSave:true})
+
+    return res
+    .status(200)
+    .json(new apiResponse(
+        200,
+        {},
+        "password changed successfully"
+    ))
+})
+
+const getCurrUser = asyncHandler(async(req,res)=>{
+    return res
+    .status(200)
+    .json({user: req.user, message:"user fetched successfully"});
+})
+
+export {
+    userRegister , 
+    userLogin , 
+    userLogout , 
+    refreshAccessToken ,
+    updateUserName ,
+    updateFullname ,
+    changeAvatar ,
+    changeCover ,
+    changePassword ,
+    getCurrUser
+};
